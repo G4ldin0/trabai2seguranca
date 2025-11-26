@@ -1,6 +1,6 @@
 package com.ufersa.EnvironmentalMonitoring.Edge;
 
-import com.ufersa.EnvironmentalMonitoring.Sensor.SampleData;
+import com.ufersa.EnvironmentalMonitoring.Shared.SampleData;
 
 import java.io.IOException;
 import java.io.OutputStreamWriter;

@@ -1,4 +1,4 @@
-package com.ufersa.EnvironmentalMonitoring.Sensor;
+package com.ufersa.EnvironmentalMonitoring.Shared;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;

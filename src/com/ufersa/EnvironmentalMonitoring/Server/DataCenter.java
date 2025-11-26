@@ -1,6 +1,6 @@
 package com.ufersa.EnvironmentalMonitoring.Server;
 
-import com.ufersa.EnvironmentalMonitoring.Sensor.SampleData;
+import com.ufersa.EnvironmentalMonitoring.Shared.SampleData;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -27,6 +27,7 @@ public class DataCenter {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+
     }
 
     private void loop(){
