@@ -13,36 +13,43 @@ import java.util.concurrent.TimeUnit;
 public class EdgeServer {
     private final Vector<SampleData> cache;
     private final DatagramSocket receiveSocket;
-    private final Socket sendSocket;
+    private Socket sendSocket;
     private final ScheduledExecutorService threadPool;
     private volatile boolean running;
+    private boolean connectedToCentralServer = false;
 
     public EdgeServer(int port) {
         try {
             receiveSocket = new DatagramSocket(port, InetAddress.getByName("localhost"));
-            sendSocket = new Socket("localhost", 10000);
+            sendSocket = null;
             cache = new Vector<>();
             threadPool = Executors.newScheduledThreadPool(10);
             running = true;
 
             System.out.println("EdgeServer iniciado na porta " + port);
-            loop();
-            threadPool.scheduleAtFixedRate(this::connectToCentralServer, 0, 1, TimeUnit.MINUTES);
+
+            threadPool.scheduleAtFixedRate(this::connectToCentralServer, 0, 5, TimeUnit.SECONDS);
             threadPool.scheduleAtFixedRate(this::syncCache, 0, 30, TimeUnit.SECONDS);
+            loop();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
     private void connectToCentralServer() {
-        if (!sendSocket.isConnected()) {
+        if (connectedToCentralServer) {
+            return;
+        }
+        System.out.println(sendSocket);
+        if (sendSocket == null){
             try {
-                sendSocket.connect(new InetSocketAddress("localhost", 10000), 59000);
+                sendSocket = new Socket();
+                sendSocket.connect(new InetSocketAddress("localhost", 8000), 4900);
+                connectedToCentralServer = true;
                 System.out.println("Conectado ao servidor central.");
-            } catch (SocketTimeoutException e){
-                System.err.println("Tempo de conexão esgotado ao tentar conectar ao servidor central: " + e.getMessage());
             } catch (IOException e) {
-                System.err.println("Não foi possível conectar ao servidor central: " + e.getMessage());
+                sendSocket = null;
+                System.err.println("Falha ao conectar ao servidor central: " + e.getMessage());
             }
         }
     }
@@ -92,7 +99,7 @@ public class EdgeServer {
         if (cache.isEmpty()) {
             return;
         }
-        if (!sendSocket.isConnected()) {
+        if (!connectedToCentralServer) {
             System.err.println("Não foi possível sincronizar cache: conexão com o servidor central perdida.");
             return;
         }
