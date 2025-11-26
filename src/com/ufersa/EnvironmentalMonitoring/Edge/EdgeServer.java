@@ -19,7 +19,7 @@ public class EdgeServer {
 
     public EdgeServer(int port) {
         try {
-            receiveSocket = new DatagramSocket(port);
+            receiveSocket = new DatagramSocket(port, InetAddress.getByName("localhost"));
             sendSocket = new Socket("localhost", 10000);
             cache = new Vector<>();
             threadPool = Executors.newScheduledThreadPool(10);
@@ -138,7 +138,7 @@ public class EdgeServer {
 
     // Método main para testar o servidor
     public static void main(String[] args) {
-        EdgeServer server = new EdgeServer(9000);
+        EdgeServer server = new EdgeServer(9090);
 
         Runtime.getRuntime().addShutdownHook(new Thread(server::stop));
     }

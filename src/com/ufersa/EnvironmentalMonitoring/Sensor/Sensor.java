@@ -7,20 +7,26 @@ import java.time.LocalDateTime;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 public class Sensor{
     private final ThreadLocalRandom rnd;
     private final String id;
     private final DatagramSocket socket;
+    private final ScheduledExecutorService executor;
 
     public Sensor(String id){
         this.id = id;
         this.rnd = ThreadLocalRandom.current();
-
-        try (ScheduledExecutorService executor = Executors.newScheduledThreadPool(1)){
-            socket = new DatagramSocket(8080);
-
-            executor.scheduleAtFixedRate(this::loop, 0, 3, java.util.concurrent.TimeUnit.SECONDS);
+        executor = Executors.newScheduledThreadPool(1);
+        try {
+            socket = new DatagramSocket();
+            executor.scheduleAtFixedRate(this::loop, 0, 3, TimeUnit.SECONDS);
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                executor.shutdownNow();
+                socket.close();
+                System.out.println("Sensor shutdown completed.");
+            }));
         } catch (SocketException e) {
             System.err.println("Failed to create socket: " + e.getMessage());
             throw new RuntimeException(e);
@@ -30,11 +36,12 @@ public class Sensor{
     private void loop(){
         try {
             SampleData data = captureData();
+            System.out.println("captured data: \n" + data);
             String dataStr = data.toString(); // TODO: criptografar
-            socket.send(new DatagramPacket(dataStr.getBytes(StandardCharsets.UTF_8), 1024,
+            socket.send(new DatagramPacket(dataStr.getBytes(StandardCharsets.UTF_8), dataStr.getBytes().length,
                     java.net.InetAddress.getByName("localhost"), 9090));
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            System.err.println("erro ao enviar dados: " + e.getMessage());
         }
     }
 
