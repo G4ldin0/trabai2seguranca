@@ -62,4 +62,37 @@ public class SampleData implements Serializable {
                 ", uvIndex=" + uvIndex +
                 '}';
     }
+
+    public static SampleData fromString(String dataStr) {
+        String[] parts = dataStr.replace("SampleData{", "")
+                .replace("}", "")
+                .split(", ");
+        String sensorId = parts[0].split("=")[1];
+        LocalDateTime timestamp = LocalDateTime.parse(parts[1].split("=")[1]);
+        double co2 = Double.parseDouble(parts[2].split("=")[1]);
+        double co = Double.parseDouble(parts[3].split("=")[1]);
+        double no2 = Double.parseDouble(parts[4].split("=")[1]);
+        double so2 = Double.parseDouble(parts[5].split("=")[1]);
+        double pm25 = Double.parseDouble(parts[6].split("=")[1]);
+        double pm10 = Double.parseDouble(parts[7].split("=")[1]);
+        double humidity = Double.parseDouble(parts[8].split("=")[1]);
+        double temperature = Double.parseDouble(parts[9].split("=")[1]);
+        double noiseDb = Double.parseDouble(parts[10].split("=")[1]);
+        double uvIndex = Double.parseDouble(parts[11].split("=")[1]);
+
+        return new SampleData(
+                sensorId,
+                timestamp,
+                co2,
+                co,
+                no2,
+                so2,
+                pm25,
+                pm10,
+                humidity,
+                temperature,
+                noiseDb,
+                uvIndex
+        );
+    }
 }
