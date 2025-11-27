@@ -1,9 +1,11 @@
 package com.ufersa.EnvironmentalMonitoring.Sensor;
 import com.ufersa.EnvironmentalMonitoring.Shared.SampleData;
 
+import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.concurrent.Executors;
@@ -16,13 +18,18 @@ public class Sensor{
     private final String id;
     private final DatagramSocket socket;
     private final ScheduledExecutorService executor;
+    private final String location;
+    private String edgeServerAddress;
 
-    public Sensor(String id){
+    public Sensor(String id, String location){
+        this.location = location;
         this.id = id;
         this.rnd = ThreadLocalRandom.current();
         executor = Executors.newScheduledThreadPool(1);
         try {
             socket = new DatagramSocket();
+            requestEdgeServer();
+            System.out.println("Starting data capture loop...");
             executor.scheduleAtFixedRate(this::loop, 0, 3, TimeUnit.SECONDS);
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 executor.shutdownNow();
@@ -35,13 +42,45 @@ public class Sensor{
         }
     }
 
+    private void requestEdgeServer(){
+        String locationTesting = this.location;
+        while (true) {
+            try {
+                byte[] requestBytes = ("locate " + locationTesting).getBytes(StandardCharsets.UTF_8);
+                DatagramPacket request = new DatagramPacket(
+                        requestBytes,
+                        requestBytes.length,
+                        java.net.InetAddress.getByName("localhost"),
+                        10000
+                );
+                socket.send(request);
+                DatagramPacket response = new DatagramPacket(new byte[256], 256);
+                socket.setSoTimeout(5000);
+                socket.receive(response);
+                String responseStr = new String(response.getData(), 0, response.getLength());
+                if (responseStr.equals("not_found") || responseStr.equals("invalid")){
+                    System.out.println("Edge Server not found for location: " + location);
+                    locationTesting = "location1"; // testar outra location
+                    continue;
+                }
+                this.edgeServerAddress = responseStr;
+                System.out.println("Edge Server found at address: " + edgeServerAddress);
+                break;
+            } catch (SocketTimeoutException e) {
+                System.out.println("No response from Locator Server, retrying...");
+            } catch (IOException e) {
+                System.err.println("Error requesting Edge Server: " + e.getMessage());
+            }
+        }
+    }
+
     private void loop(){
         try {
             SampleData data = captureData();
             System.out.println("captured data: \n" + data);
             String dataStr = data.toString(); // TODO: criptografar
             socket.send(new DatagramPacket(dataStr.getBytes(StandardCharsets.UTF_8), dataStr.getBytes().length,
-                    java.net.InetAddress.getByName("localhost"), 9090));
+                    java.net.InetAddress.getByName(edgeServerAddress), 9090));
         } catch (Exception e) {
             System.err.println("erro ao enviar dados: " + e.getMessage());
         }
@@ -77,6 +116,6 @@ public class Sensor{
     }
 
     public static void main(String[] args) {
-        new Sensor("SENSOR-001");
+        new Sensor("SENSOR-001", "location1");
     }
 }
