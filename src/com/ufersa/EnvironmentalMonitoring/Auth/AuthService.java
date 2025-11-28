@@ -121,6 +121,7 @@ public class AuthService {
 
                                 token = Jwts.builder()
                                         .setSubject(request[2])
+                                        .claim("role", "sensor")
                                         .setIssuedAt(new Date())
                                         .setExpiration(new Date(System.currentTimeMillis() + 600000)) // 10 minutos de validade
                                         .signWith(key)
@@ -163,6 +164,7 @@ public class AuthService {
 
                         String token = Jwts.builder()
                                 .setSubject(request[1])
+                                .claim("role", "client")
                                 .setIssuedAt(new Date())
                                 .setExpiration(new Date(System.currentTimeMillis() + 600000)) // 10 minutos de validade
                                 .signWith(key)
@@ -226,20 +228,32 @@ public class AuthService {
                             .build()
                             .parseClaimsJws(token)
                             .getBody();
-                    String sensorId = claims.getSubject();
+                    String id = claims.getSubject();
+                    switch ((String) claims.get("role")){
+                        case "client":
+                            if (!sensorIds.contains(id)) {
+                                System.out.println("Invalid sensor ID in token: " + id);
+                                writer.write("invalid_sensor\n");
+                                writer.flush();
 
-                    if (!sensorIds.contains(sensorId)) {
-                        System.out.println("Invalid sensor ID in token: " + sensorId);
-                        writer.write("invalid_sensor\n");
-                        writer.flush();
+                                continue;
+                            }
+                            break;
+                        case "sensor":
+                            if (!clientCredentials.containsKey(id) || !clientCredentials.get(id).equals(claims.get("password"))) {
+                                System.out.println("Invalid Credentials: " + id);
+                                writer.write("invalid_credentials\n");
+                                writer.flush();
 
-                        continue;
+                                continue;
+                            }
+                            break;
                     }
 
                     writer.write("valid\n");
                     writer.flush();
 
-                    System.out.println("Token valid for sensor ID: " + sensorId + " from " + socket.getRemoteSocketAddress());
+                    System.out.println("Token valid for sensor ID: " + id + " from " + socket.getRemoteSocketAddress());
 
                 } catch (ExpiredJwtException e) {
                     System.out.println("Token expired from " + socket.getRemoteSocketAddress());
