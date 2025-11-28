@@ -33,7 +33,7 @@ public class DataCenter {
     private void loop(){
         while (!serversocket.isClosed()){
             try {
-                var socket = serversocket.accept();
+                Socket socket = serversocket.accept();
                 threadPool.submit(() -> processConnection(socket));
             } catch (IOException e) {
                 System.err.println("Erro ao aceitar conexão: " + e.getMessage());
@@ -42,8 +42,7 @@ public class DataCenter {
     }
 
     private void processConnection(Socket socket){
-        try (socket;
-             var reader = new BufferedReader(new InputStreamReader(socket.getInputStream()))
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()))
         ) {
             String line;
             while ((line = reader.readLine()) != null) {
