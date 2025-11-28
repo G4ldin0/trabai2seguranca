@@ -2,8 +2,7 @@ package com.ufersa.EnvironmentalMonitoring.Edge;
 
 import com.ufersa.EnvironmentalMonitoring.Shared.SampleData;
 
-import java.io.IOException;
-import java.io.OutputStreamWriter;
+import java.io.*;
 import java.net.*;
 import java.util.Vector;
 import java.util.concurrent.Executors;
@@ -14,6 +13,9 @@ public class EdgeServer {
     private final Vector<SampleData> cache;
     private final DatagramSocket receiveSocket;
     private Socket sendSocket;
+    private Socket authSocket;
+    private BufferedReader authReader;
+    private PrintWriter authWriter;
     private final ScheduledExecutorService threadPool;
     private volatile boolean running;
     private boolean connectedToCentralServer = false;
@@ -29,6 +31,7 @@ public class EdgeServer {
             System.out.println("EdgeServer iniciado na porta " + port);
 
             threadPool.scheduleAtFixedRate(this::connectToCentralServer, 0, 5, TimeUnit.SECONDS);
+            threadPool.scheduleAtFixedRate(this::connectToauthService, 0, 5, TimeUnit.SECONDS);
             threadPool.scheduleAtFixedRate(this::syncCache, 0, 30, TimeUnit.SECONDS);
             loop();
         } catch (IOException e) {
@@ -36,11 +39,25 @@ public class EdgeServer {
         }
     }
 
+    private void connectToauthService(){
+        if (authSocket == null){
+            try {
+                authSocket = new Socket();
+                authSocket.connect(new InetSocketAddress("localhost", 11000), 4900);
+                authReader = new BufferedReader(new InputStreamReader(authSocket.getInputStream()));
+                authWriter = new PrintWriter(new OutputStreamWriter(authSocket.getOutputStream()), true);
+                System.out.println("Conectado ao serviço de autenticação.");
+            } catch (IOException e) {
+                authSocket = null;
+                System.err.println("Falha ao conectar ao serviço de autenticação: " + e.getMessage());
+            }
+        }
+    }
+
     private void connectToCentralServer() {
         if (connectedToCentralServer) {
             return;
         }
-        System.out.println(sendSocket);
         if (sendSocket == null){
             try {
                 sendSocket = new Socket();
@@ -72,15 +89,24 @@ public class EdgeServer {
 
     private void processMessage(byte[] data) {
         try {
-            String message = new String(data); // TODO: descriptografar
+            String[] message = new String(data).split(";"); // TODO: descriptografar
+            System.out.println(new String(data));
+            String token = message[0];
+            authWriter.println(token);
+            authWriter.flush();
+            String authResponse = authReader.readLine();
+            if (!authResponse.equals("valid")) {
+                System.err.println("Token de autenticação inválido: " + token);
+                return;
+            }
 
 
-            SampleData sampleData = SampleData.fromString(message);
+            SampleData sampleData = SampleData.fromString(message[1]);
 
             System.out.println("=== MENSAGEM RECEBIDA ===");
             System.out.println("Thread: " + Thread.currentThread().getName());
             System.out.println("Tamanho: " + data.length + " bytes");
-            System.out.println("Conteúdo: " + message);
+            System.out.println("Conteúdo: " + message[1]);
             System.out.println("Timestamp: " + java.time.LocalDateTime.now());
             System.out.println("========================\n");
 
@@ -91,6 +117,7 @@ public class EdgeServer {
             System.err.println("Erro ao processar mensagem: " + e.getMessage());
             System.err.println("Thread: " + Thread.currentThread().getName());
             System.err.println("Causa: " + e.getClass().getSimpleName());
+            e.printStackTrace();
         }
     }
 
@@ -127,6 +154,22 @@ public class EdgeServer {
 
         if (receiveSocket != null && !receiveSocket.isClosed()) {
             receiveSocket.close();
+        }
+
+        if (sendSocket != null && !sendSocket.isClosed()) {
+            try {
+                sendSocket.close();
+            } catch (IOException e) {
+                System.err.println("Erro ao fechar o socket de envio: " + e.getMessage());
+            }
+        }
+
+        if (authSocket != null && !authSocket.isClosed()) {
+            try {
+                authSocket.close();
+            } catch (IOException e) {
+                System.err.println("Erro ao fechar o socket de autenticação: " + e.getMessage());
+            }
         }
 
         if (threadPool != null && !threadPool.isShutdown()) {

@@ -20,6 +20,8 @@ public class Sensor{
     private final ScheduledExecutorService executor;
     private final String location;
     private String edgeServerAddress;
+    private String authToken = null;
+    private final String authServerAddress = "localhost";
 
     public Sensor(String id, String location){
         this.location = location;
@@ -28,9 +30,11 @@ public class Sensor{
         executor = Executors.newScheduledThreadPool(1);
         try {
             socket = new DatagramSocket();
+            requestToken();
             requestEdgeServer();
             System.out.println("Starting data capture loop...");
             executor.scheduleAtFixedRate(this::loop, 0, 3, TimeUnit.SECONDS);
+            executor.scheduleAtFixedRate(this::requestToken, 10, 10, TimeUnit.MINUTES);
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 executor.shutdownNow();
                 socket.close();
@@ -38,6 +42,31 @@ public class Sensor{
             }));
         } catch (SocketException e) {
             System.err.println("Failed to create socket: " + e.getMessage());
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void requestToken(){
+        this.authToken = null;
+        String request = "request_token device " + this.id;
+        try {
+            socket.send(
+                    new DatagramPacket(
+                            request.getBytes(StandardCharsets.UTF_8),
+                            request.getBytes().length,
+                            java.net.InetAddress.getByName(authServerAddress),
+                            11000
+                    )
+            );
+            DatagramPacket response = new DatagramPacket(new byte[256], 256);
+            socket.setSoTimeout(5000);
+            socket.receive(response);
+            String responseStr = new String(response.getData(), 0, response.getLength());
+            this.authToken = responseStr;
+            System.out.println("Received new auth token: " + this.authToken);
+        } catch (SocketTimeoutException e) {
+            System.out.println("No response from Auth Server for token request.");
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
@@ -75,11 +104,17 @@ public class Sensor{
     }
 
     private void loop(){
+        if (this.authToken == null) {
+            System.out.println("No auth token available, skipping data send.");
+            return;
+        }
+
         try {
             SampleData data = captureData();
             System.out.println("captured data: \n" + data);
             String dataStr = data.toString(); // TODO: criptografar
-            socket.send(new DatagramPacket(dataStr.getBytes(StandardCharsets.UTF_8), dataStr.getBytes().length,
+            String message = this.authToken + ";" + dataStr;
+            socket.send(new DatagramPacket(message.getBytes(StandardCharsets.UTF_8), message.getBytes().length,
                     java.net.InetAddress.getByName(edgeServerAddress), 9090));
         } catch (Exception e) {
             System.err.println("erro ao enviar dados: " + e.getMessage());

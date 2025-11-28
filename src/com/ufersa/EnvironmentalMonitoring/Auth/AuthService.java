@@ -4,16 +4,12 @@ import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.SignatureException;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import java.io.*;
 import java.net.*;
 import java.security.Key;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Vector;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -44,11 +40,11 @@ public class AuthService {
             }
         };
 
-        serverSocket = new ServerSocket(10000, 0, InetAddress.getByName("localhost"));
-        requestSocket = new DatagramSocket(10000, InetAddress.getByName("localhost"));
+        serverSocket = new ServerSocket(11000, 0, InetAddress.getByName("localhost"));
+        requestSocket = new DatagramSocket(11000, InetAddress.getByName("localhost"));
 
         try {
-            threadPool = Executors.newFixedThreadPool(2);
+            threadPool = Executors.newFixedThreadPool(10);
 
             threadPool.submit(this::tcpLoop);
             threadPool.submit(this::udpLoop);
@@ -64,6 +60,7 @@ public class AuthService {
             try {
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                 requestSocket.receive(packet);
+                System.out.println("Received UDP packet from " + packet.getAddress() + ":" + packet.getPort());
                 String[] request = new String(packet.getData(), 0, packet.getLength()).split(" ");
 
                 switch (request[0]){
@@ -194,7 +191,6 @@ public class AuthService {
                 }
                 System.out.println("Received UDP request: " + new String(packet.getData(), 0, packet.getLength()));
 
-
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -207,6 +203,7 @@ public class AuthService {
             try {
                 Socket socket = serverSocket.accept();
                 threadPool.submit(() -> processConnection(socket));
+                System.out.println("Accepted TCP connection from " + socket.getRemoteSocketAddress());
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -217,7 +214,7 @@ public class AuthService {
     private void processConnection(Socket socket) {
         try (
                 BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                PrintWriter writer = new PrintWriter(socket.getOutputStream(), true)
+                OutputStreamWriter writer = new OutputStreamWriter(socket.getOutputStream())
         ) {
             String token;
             while ((token = reader.readLine()) != null) {
@@ -233,40 +230,49 @@ public class AuthService {
 
                     if (!sensorIds.contains(sensorId)) {
                         System.out.println("Invalid sensor ID in token: " + sensorId);
-                        writer.println("invalid_sensor");
+                        writer.write("invalid_sensor\n");
+                        writer.flush();
+
                         continue;
                     }
 
-                    writer.println("valid");
+                    writer.write("valid\n");
+                    writer.flush();
+
                     System.out.println("Token valid for sensor ID: " + sensorId + " from " + socket.getRemoteSocketAddress());
 
                 } catch (ExpiredJwtException e) {
                     System.out.println("Token expired from " + socket.getRemoteSocketAddress());
-                    writer.println("token_expired");
+                    writer.write("token_expired\n");
+                    writer.flush();
+
                 } catch (SignatureException e) {
                     System.out.println("Invalid token signature from " + socket.getRemoteSocketAddress());
-                    writer.println("invalid_signature");
+                    writer.write("invalid_signature\n");
+                    writer.flush();
+
                 } catch (MalformedJwtException | UnsupportedJwtException | IllegalArgumentException e) {
                     System.out.println("Invalid token from " + socket.getRemoteSocketAddress() + ": " + e.getMessage());
-                    writer.println("invalid_token");
+                    writer.write("invalid_token\n");
+                    writer.flush();
+
                 }
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            e.printStackTrace();
         }
     }
 
     public static void main(String[] args) {
         try {
             new AuthService();
-            DatagramSocket teste = new DatagramSocket(8080);
-            String message = "request_token client admin admin123";
-            teste.send(new DatagramPacket(
-                    message.getBytes(),
-                    message.getBytes().length,
-                    InetAddress.getByName("localhost"),
-                    10000
-            ));
+            Socket teste = new Socket(InetAddress.getByName("localhost"), 11000);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(teste.getInputStream()));
+            OutputStreamWriter writer = new OutputStreamWriter(teste.getOutputStream());
+            writer.write("invalid_token_example\n");
+            writer.flush();
+            String response = reader.readLine();
+            System.out.println("Response for invalid token: " + response);
         } catch (IOException e) {
             e.printStackTrace();
         }
