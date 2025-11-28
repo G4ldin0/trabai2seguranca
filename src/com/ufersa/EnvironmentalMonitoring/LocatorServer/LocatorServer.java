@@ -16,6 +16,7 @@ public class LocatorServer {
                 put("location1", InetAddress.getLoopbackAddress());
                 put("location2", InetAddress.getLoopbackAddress());
                 put("location3", InetAddress.getLoopbackAddress());
+                put("datacenter", InetAddress.getLoopbackAddress());
         }};
         socket = new DatagramSocket(10000);
         System.out.println("Locator Server is running on port 10000...");
